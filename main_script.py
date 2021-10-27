@@ -20,6 +20,7 @@ class PathObj:
             self.copy_from_path.split("\\")[-1] != "" else os.path.join(self.default_path,
                                                                         self.copy_from_path.split("\\")[-2])
 
+    # Logger wrapper. Generates a log file with the time and functions ran
     def logger_w(msg):
         def logger(func):
             # @wraps(func)
@@ -33,6 +34,7 @@ class PathObj:
             return wrapper
         return logger
 
+    # Handle the existence of the path
     @logger_w(msg="The check_path_existence ran!")
     def check_path_existence(self) -> list[bool]:
         if not os.path.exists(self.final_destination_path):
@@ -46,6 +48,7 @@ class PathObj:
             print(f"Directory {self.final_destination_path} exists and has contents. This will not be synchronized.")
             return [False, False]
 
+    # Gather the largest file in the source folder by extension
     @logger_w(msg="The gather_largest_file ran!")
     def gather_largest_file(self, extension: str) -> os.path:
         max_size = float(0)
@@ -61,6 +64,7 @@ class PathObj:
 
         return max_file_in_folder
 
+    # Gather a limited or unlimited amount of files that contain a keyword from the folder.
     @logger_w(msg="The gather_special_files ran!")
     def gather_special_files(self, keyword: str, *args) -> list:
         special_files = list()
@@ -78,25 +82,29 @@ class PathObj:
 
         return special_files
 
+    # Updates gathered source paths
     @logger_w(msg="The update_gathered_paths ran!")
     def update_gathered_paths(self):
         PathObj.gathered_paths.append(self.copy_from_path)
         return PathObj.gathered_paths
 
+    # Updates the correspondence dictionary
     @logger_w(msg="The update_path_correspondence ran!")
-    def update_path_correspondence(self, *args, destination: str):
-        PathObj.path_correspondence[self.final_destination_path] = [*args, destination]
+    def update_path_correspondence(self, *args):
+        PathObj.path_correspondence[self.final_destination_path] = [*args]
         return PathObj.path_correspondence
 
+    # Copies the stored largest file
     @logger_w(msg="The copy_largest_file ran!")
     def copy_largest_file(self):
         item = self.final_destination_path
         source = PathObj.path_correspondence[item][0]
-        destination = PathObj.path_correspondence[item][2]
+        destination = item
         copy(source, destination)
         print(f"Copied {source} to {destination}")
         return print("Copy success!")
 
+    # Copies the stored special files
     @logger_w(msg="The copy_special_files ran!")
     def copy_special_files(self):
         item = self.final_destination_path
@@ -104,7 +112,7 @@ class PathObj:
         if len(source_list) != 0:
             for j in range(len(source_list)):
                 source = source_list[j]
-                destination = PathObj.path_correspondence[item][2]
+                destination = item
                 copy(source, destination)
                 print(f"Copied {source} to {destination}")
         return print("Multi-Copy success!")
@@ -117,38 +125,46 @@ class PathObj:
 
 
 class JsonParser:
-
+    """
+    Used to read a json file.
+    It must contain a key pair of strings.
+    The destination has to be one of the keys.
+    The other keys should contain 'path' to be considered
+    """
     def __init__(self, json_file):
         self.json_file = json_file
 
+    # Return a py readable dictionary
     def parse_json(self) -> dict:
         with open(self.json_file, 'r') as j:
             data = json.load(j)
         return data
 
+    # Return the given JSON destination along with a curated path dictionary
+    @staticmethod
+    def extract_destination(data: dict) -> list:
+        j_destination = data["destination"]
+        j_dict_copy = data.copy()
+        del j_dict_copy["destination"]
+        return [j_destination, j_dict_copy]
+
 
 def main():
-    # nr_of_paths = input("How many paths to sync?: ")
-    # number = int(nr_of_paths)
     obj = JsonParser("paths_to_sync.json")
     j_dict = obj.parse_json()
-    j_destination = j_dict["destination"]
-    j_dict_copy = j_dict.copy()
-    del j_dict_copy["destination"]
-    roll_list = [x for x in j_dict_copy.keys() if "path" in x]
+    extracted_dst, parsed_json_dict = JsonParser.extract_destination(j_dict)
+    roll_list = [x for x in parsed_json_dict.keys() if "path" in x]
     for item in roll_list:
-        # current_path = input(f"Insert the from path {i}: ")
-        item = j_dict_copy[item]
-        path_obj = PathObj(item, j_destination)
+        item = parsed_json_dict[item]
+        path_obj = PathObj(item, extracted_dst)
         bool_list = path_obj.check_path_existence()
         if (bool_list[0] and bool_list[1]) or (bool_list[0] and not bool_list[1]):
             path_obj.update_gathered_paths()
-            extension = ".a4db"
-            special_text = "binout"
+            extension = ".txt"
+            special_text = "test"
             largest_file = path_obj.gather_largest_file(extension)
             special_objects = path_obj.gather_special_files(special_text, 10)
-            path_obj.update_path_correspondence(largest_file, special_objects,
-                                                destination=path_obj.final_destination_path)
+            path_obj.update_path_correspondence(largest_file, special_objects)
             print(str(path_obj))
             if PathObj.path_correspondence[path_obj.final_destination_path][0] != '':
                 path_obj.copy_largest_file()
